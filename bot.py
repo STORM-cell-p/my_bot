@@ -12,8 +12,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ---------- CONFIG ----------
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8771325439:AAF0cXyLglwCrW6kg14v3CUnjxlpWYOSkXY")
-OWNER_ID  = int(os.environ.get("OWNER_ID", "7485896377"))
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+OWNER_ID  = int(os.environ.get("OWNER_ID", "0"))
 
 BASE_URL    = "https://sexalarab.net/"
 DOMAIN      = "https://sexalarab.net"
