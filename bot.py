@@ -1,5 +1,5 @@
 # language: Python, file: bot.py
-# sexalarab.net bot — 45s-300s, كاش, توكن من البيئة
+# sexalarab.net bot — 45s-300s, pagination قوي, كاش
 
 import os, json, random, asyncio, re
 from pathlib import Path
@@ -12,14 +12,14 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ---------- CONFIG ----------
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8232134538:AAFjjniY1Z_xILXJ14KbOT-Koc7WQ9Fl5XA")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8771325439:AAF0cXyLglwCrW6kg14v3CUnjxlpWYOSkXY")
 OWNER_ID  = int(os.environ.get("OWNER_ID", "7485896377"))
 
 BASE_URL    = "https://sexalarab.net/"
 DOMAIN      = "https://sexalarab.net"
 MIN_SEC     = 45
 MAX_SEC     = 300
-MAX_PAGES   = 30
+MAX_PAGES   = 50
 OUT_DIR     = Path("downloads")
 CACHE_FILE  = Path("cache.json")
 TG_LIMIT_MB = 50
@@ -53,12 +53,37 @@ def parse_duration(text):
     return int(m.group(1)) * 60 + int(m.group(2))
 
 
+def find_next_pages(soup, current_url):
+    """يلقط كل أشكال روابط الصفحة التالية."""
+    next_pages = set()
+    for a in soup.find_all("a", href=True):
+        href = urljoin(current_url, a["href"])
+        if not href.startswith(DOMAIN):
+            continue
+        if href == current_url:
+            continue
+        # أشكال محتملة
+        if (re.search(r"/page/\d+", href) or
+            "?page=" in href or
+            "?paged=" in href or
+            "?p=" in href):
+            next_pages.add(href)
+    return next_pages
+
+
 def collect_links_with_durations():
     results = {}
-    queue, page = [BASE_URL], 0
+    visited = set()
+    queue = [BASE_URL]
+    page = 0
 
     while queue and page < MAX_PAGES:
-        url = queue.pop(0); page += 1
+        url = queue.pop(0)
+        if url in visited:
+            continue
+        visited.add(url)
+        page += 1
+
         try:
             r = fetch(url)
             print(f"[page {page}] {url} -> {r.status_code} ({len(r.text)}b)")
@@ -70,11 +95,10 @@ def collect_links_with_durations():
 
         soup = BeautifulSoup(r.text, "html.parser")
 
+        # 1) لقط روابط الفيديو + مدتها
         for a in soup.find_all("a", href=True):
             href = urljoin(url, a["href"])
-            if not is_video_url(href):
-                continue
-            if href in results:
+            if not is_video_url(href) or href in results:
                 continue
 
             text = a.get_text(" ", strip=True)
@@ -91,11 +115,12 @@ def collect_links_with_durations():
 
             results[href] = dur
 
-        for a in soup.find_all("a", href=True):
-            href = urljoin(url, a["href"])
-            if re.search(r"/page/\d+", href) or "?page=" in href:
-                if href.startswith(DOMAIN) and href not in queue:
-                    queue.append(href)
+        # 2) أضف صفحات جديدة للـ queue
+        new_pages = find_next_pages(soup, url) - visited
+        for np in sorted(new_pages):
+            if np not in queue:
+                queue.append(np)
+        print(f"[queue] +{len(new_pages)} pages, queue={len(queue)}")
 
     return results
 
